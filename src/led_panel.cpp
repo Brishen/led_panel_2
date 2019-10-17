@@ -75,7 +75,7 @@ bool TWELVE_HOUR = true;
 bool VALID_GPS_FIX = false;
 
 String top_current_mode = "time";
-String bottom_current_mode = "date";
+String bottom_current_mode = "humidity";
 
 String possible_modes[] = {
 	"date",
@@ -116,6 +116,7 @@ void syncGPS()
 
 				last_update_time = current_time;
 				// Set RTC to UTC time
+				// TODO: only set time when age is too old or power off
 				utc_time = DateTime(Year, Month, Day, Hour, Minute, Second);
 				local_time = utc_time.operator+(TimeSpan(3600 * offset));
 				rtc.adjust(local_time);
@@ -126,10 +127,12 @@ void syncGPS()
 
 void setPanel(int hour, int minute, int second)
 {
-	// Set the time on the RGB panel
+	// Fill the screen with black
 	matrix.fillScreen(0);
 
-	//matrix.setTextColor(matrix.Color333(7, 7, 7));
+	// Example to set the text to white
+	// matrix.setTextColor(matrix.Color333(7, 7, 7));
+	// Create a color using the HSV system to control brightness
 	uint16_t color = matrix.ColorHSV(COLOR, SATURATION, BRIGHTNESS, GAMMA);
 	matrix.setTextColor(color);
 	if (top_current_mode == "time")
@@ -209,30 +212,36 @@ void setPanel(int hour, int minute, int second)
 
 void buttonFunction()
 {
+	/*
+	This function is used as a callback for when a button is pressed
+	*/
 	Serial.println("The button has been pressed!");
 	syncGPS();
 }
 
 void setup()
 {
-	// put your setup code here, to run once:
+	// Initialize serial
 	Serial.begin(9600);
 	Serial.println("Starting up clock");
-	matrix.begin();
 	SerialGPS.begin(9600);
 
+	// Set up the external RTC
 	rtc.begin();
 
+	// Start the LED matrix
+	matrix.begin();
+	
 	// fill the screen with black
 	matrix.fillScreen(0);
 	matrix.setTextWrap(false); // Allow text to run off right edge
 	matrix.setTextSize(0);	 // size 1 == 8 pixels high
 
+	// Start the atmospheric sensor, display error if not found
 	if (!bme.begin())
 	{
 		Serial.println("Could not find a valid BME680 sensor, check wiring!");
-		while (1)
-			;
+		while (1);
 	}
 
 	// Set up oversampling and filter initialization
@@ -242,13 +251,15 @@ void setup()
 	bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
 	bme.setGasHeater(320, 150); // 320*C for 150 ms
 
+	// Attach button interrupt
 	attachInterrupt(digitalPinToInterrupt(interruptPin), buttonFunction, RISING);
-	matrix.fillScreen(0);
+	
+	// If year is 2000, then GPS time is *probably* wrong
 	while (year() == 2000)
 	{
 		syncGPS();
 	}
-	setPanel(hour(), minute(), second());
+	// setPanel(hour(), minute(), second());
 }
 
 void loop()
@@ -256,7 +267,7 @@ void loop()
 	// put your main code here, to run repeatedly:
 
 	syncGPS();
-
+	// Get current time from RTC
 	DateTime now = rtc.now();
 
 		if (TWELVE_HOUR && now.hour() > 12){
